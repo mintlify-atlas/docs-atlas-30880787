@@ -1,0 +1,78 @@
+---
+title: "Labels and filters: organize email with custom tags"
+description: "Create and manage custom labels in Zero to organize email threads. Apply colors, label threads in bulk, and use categories for automatic inbox sorting."
+---
+
+Zero supports custom labels for organizing your email. Labels work like tags — you can apply multiple labels to a single thread, create labels with custom colors, and filter your inbox by label. Zero also provides an automatic categories system that groups incoming mail by type.
+
+## Creating a label
+
+<Steps>
+  <Step title="Open Settings">
+    Navigate to **Settings → Labels** from the sidebar.
+  </Step>
+  <Step title="Create a new label">
+    Click **New label**, enter a name, and choose a color. Zero stores both a `backgroundColor` and a `textColor` for each label, giving you full control over how it looks.
+  </Step>
+  <Step title="Save">
+    Click **Create** to save the label. It now appears in your sidebar and is available to apply to threads.
+  </Step>
+</Steps>
+
+## Applying labels to threads
+
+To label a thread:
+
+1. Open the thread or select it in the inbox list
+2. Click the label icon in the toolbar
+3. Select one or more labels from the dropdown
+4. The thread is immediately tagged and appears under that label in the sidebar
+
+You can also bulk-apply labels by selecting multiple threads with the checkbox and using the label action from the bulk toolbar.
+
+## Label colors
+
+When creating or editing a label, Zero lets you set a `backgroundColor` and `textColor`. Zero maps these to Gmail's standard label color palette when syncing with Google accounts, ensuring colors appear consistently across the web interface and Zero.
+
+## Updating a label
+
+Go to **Settings → Labels**, click the edit icon next to the label you want to change, update the name or colors, and save. Changes sync immediately to all threads carrying that label.
+
+## Categories
+
+Zero includes an automatic categories system that classifies incoming email into groups such as:
+
+- **Primary** — Personal and important messages
+- **Updates** — Newsletters, receipts, notifications
+- **Promotions** — Marketing and deals
+- **Social** — Social network activity
+
+Categories appear as tabs in the inbox. You can customize which categories are shown in **Settings → Categories**.
+
+## Deleting a label
+
+Go to **Settings → Labels**, find the label, and click **Delete**. Deleting a label removes it from all threads — the threads themselves are not deleted.
+
+<Warning>Deleting a label is permanent. Threads tagged with that label lose the tag but remain in your inbox.</Warning>
+
+## Rate limits
+
+The label API enforces the following sliding-window rate limits per user:
+
+| Operation | Limit |
+|-----------|-------|
+| List labels | 120 requests / minute |
+| Create label | 60 requests / minute |
+| Update label | 60 requests / minute |
+| Delete label | 60 requests / minute |
+
+These limits apply when accessing labels programmatically via the [MCP integration](/features/mcp-integration) or the internal tRPC API.
+
+<CardGroup cols={2}>
+  <Card title="Unified inbox" icon="inbox" href="/features/unified-inbox">
+    Browse and filter your inbox
+  </Card>
+  <Card title="AI assistant" icon="sparkles" href="/features/ai-assistant">
+    Let AI help organize and search
+  </Card>
+</CardGroup>

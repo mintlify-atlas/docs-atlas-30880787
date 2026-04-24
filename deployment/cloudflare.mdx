@@ -1,0 +1,155 @@
+---
+title: "Deploy Zero's backend and frontend to Cloudflare"
+description: "Deploy Zero's backend to Cloudflare Workers and frontend to Cloudflare Pages. Covers wrangler configuration, environment variables, and the deploy commands."
+---
+
+Zero is architected to run natively on Cloudflare's developer platform: the backend (`apps/server`) deploys as a Cloudflare Worker named `zero-server`, and the frontend (`apps/mail`) deploys as a Cloudflare Pages application named `zero-production`. Both are configured through `wrangler.jsonc` files in their respective app directories and share a set of environment-specific variable overrides so that the same codebase can serve local, staging, and production traffic without code changes.
+
+## Architecture overview
+
+| Component | Cloudflare product | Wrangler name |
+|---|---|---|
+| Backend API | Cloudflare Workers | `zero-server` |
+| Frontend client | Cloudflare Pages | `zero-production` |
+| Database proxy | Cloudflare Hyperdrive | bound as `HYPERDRIVE` |
+| Object storage | Cloudflare R2 | bound as `THREADS_BUCKET` |
+| AI inference | Cloudflare AI | bound as `AI` |
+| Vector search | Cloudflare Vectorize | `VECTORIZE`, `VECTORIZE_MESSAGE` |
+| Stateful agents | Durable Objects | `ZERO_AGENT`, `ZERO_DB`, `ZERO_DRIVER`, and others |
+| Queue processing | Cloudflare Queues | `thread_queue`, `subscribe_queue`, `send_email_queue` |
+
+## Deploy
+
+<Steps>
+  <Step title="Install dependencies">
+    Ensure you have Node.js 22+, pnpm 10+, and the Wrangler CLI installed, then install the monorepo dependencies:
+
+    ```bash
+    pnpm install
+    ```
+  </Step>
+
+  <Step title="Authenticate with Cloudflare">
+    ```bash
+    npx wrangler login
+    ```
+
+    This opens a browser window to complete the OAuth flow. Your credentials are saved locally and reused by all subsequent `wrangler` commands.
+  </Step>
+
+  <Step title="Configure production secrets">
+    Secrets are not stored in `wrangler.jsonc` — they must be uploaded separately for each environment. Use `wrangler secret put` from the `apps/server` directory:
+
+    ```bash
+    npx wrangler secret put BETTER_AUTH_SECRET --env production
+    npx wrangler secret put GOOGLE_CLIENT_ID --env production
+    npx wrangler secret put GOOGLE_CLIENT_SECRET --env production
+    npx wrangler secret put RESEND_API_KEY --env production
+    npx wrangler secret put OPENAI_API_KEY --env production
+    ```
+
+    Each command prompts you to paste the secret value. It is encrypted and stored in Cloudflare's secret store — never in source control.
+  </Step>
+
+  <Step title="Update Google OAuth redirect URIs">
+    In the [Google Cloud Console](https://console.cloud.google.com/), add your production domain to the list of authorised redirect URIs for your OAuth 2.0 client. The URI must match the value of `VITE_PUBLIC_APP_URL` set in the production environment (e.g. `https://0.email/api/auth/callback/google`).
+  </Step>
+
+  <Step title="Deploy the backend">
+    From the repository root:
+
+    ```bash
+    pnpm deploy:backend
+    ```
+
+    This runs `wrangler deploy --env production` inside `apps/server`, uploading the Worker bundle along with all Durable Object class definitions, R2 bucket bindings, Vectorize indexes, and Queue bindings declared in `apps/server/wrangler.jsonc`.
+  </Step>
+
+  <Step title="Deploy the frontend">
+    From the repository root:
+
+    ```bash
+    pnpm deploy:frontend
+    ```
+
+    This builds the React Router v7/Vite application and publishes the static assets to Cloudflare Pages under the `zero-production` project. The `wrangler.jsonc` in `apps/mail` sets `assets.not_found_handling` to `single-page-application` so all routes are served by `index.html`.
+  </Step>
+</Steps>
+
+## Wrangler configuration
+
+<Tabs>
+  <Tab title="Backend (apps/server)">
+    The server wrangler config (`apps/server/wrangler.jsonc`) defines three environments: `local`, `staging`, and `production`. The production environment configures:
+
+    - **Hyperdrive** — proxies connections to your PostgreSQL database over Cloudflare's network with connection pooling. The `id` field references a Hyperdrive configuration created in the Cloudflare dashboard.
+    - **R2** — the `threads` bucket stores email thread data via the `THREADS_BUCKET` binding.
+    - **Vectorize** — two indexes (`threads-vector` and `messages-vector`) power semantic email search via the `VECTORIZE` and `VECTORIZE_MESSAGE` bindings.
+    - **Durable Objects** — eight classes handle stateful operations: `ZeroAgent`, `ZeroMCP`, `ZeroDB`, `ZeroDriver`, `ThinkingMCP`, `WorkflowRunner`, `ThreadSyncWorker`, and `ShardRegistry`.
+    - **Queues** — three producer/consumer pairs: `thread-queue-prod`, `subscribe-queue-prod`, and `send-email-queue-prod`.
+    - **Cron triggers** — `0 0 * * *` (daily) and `0 * * * *` (hourly) schedule background sync jobs.
+    - **`nodejs_compat`** — the compatibility flag enables Node.js built-in APIs inside the Worker runtime.
+
+    Key production `vars` (non-secret, stored in the config file):
+
+    | Variable | Production value |
+    |---|---|
+    | `NODE_ENV` | `production` |
+    | `COOKIE_DOMAIN` | `0.email` |
+    | `VITE_PUBLIC_BACKEND_URL` | `https://api.0.email` |
+    | `VITE_PUBLIC_APP_URL` | `https://0.email` |
+    | `THREAD_SYNC_MAX_COUNT` | `60` |
+    | `THREAD_SYNC_LOOP` | `true` |
+    | `OTEL_SERVICE_NAME` | `zero-email-server-production` |
+  </Tab>
+
+  <Tab title="Frontend (apps/mail)">
+    The mail wrangler config (`apps/mail/wrangler.jsonc`) is intentionally minimal. It points Cloudflare Pages at the pre-built client assets and handles SPA routing:
+
+    ```jsonc
+    {
+      "name": "zero",
+      "compatibility_date": "2025-06-27",
+      "assets": {
+        "directory": "./build/client/",
+        "not_found_handling": "single-page-application",
+        "html_handling": "force-trailing-slash"
+      }
+    }
+    ```
+
+    Environment-specific public variables are set under the `env` key:
+
+    | Environment | `VITE_PUBLIC_BACKEND_URL` | `VITE_PUBLIC_APP_URL` |
+    |---|---|---|
+    | `local` | `http://localhost:8787` | `http://localhost:3000` |
+    | `staging` | `https://sapi.0.email` | `https://staging.0.email` |
+    | `production` | `https://api.0.email` | `https://0.email` |
+  </Tab>
+</Tabs>
+
+## Build-only (without deploy)
+
+To build each package without pushing to Cloudflare:
+
+```bash
+# Build everything
+pnpm build
+
+# Build only the frontend
+pnpm build:frontend
+```
+
+## Staging environment
+
+Zero maintains a `staging` environment that mirrors production. To deploy to staging instead of production, call Wrangler directly from the relevant app directory:
+
+```bash
+# Backend staging
+npx wrangler deploy --env staging
+
+# Frontend staging
+npx wrangler deploy --env staging
+```
+
+Staging uses separate Durable Object migrations, KV namespace IDs, and Queue names (suffixed with `-staging`) so it is fully isolated from production data.

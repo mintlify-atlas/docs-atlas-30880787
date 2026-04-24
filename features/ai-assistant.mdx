@@ -1,0 +1,64 @@
+---
+title: "AI assistant: compose, search, and summarize email"
+description: "Zero's AI helps you write emails, summarize threads, and search your mailbox with natural language. Powered by OpenAI, Perplexity, Groq, and Anthropic."
+---
+
+Zero embeds AI directly into your email workflow. You can draft messages with AI assistance, ask questions about threads, search your mailbox with natural language, and let Zero learn your writing style over time. AI features work with OpenAI GPT-4o, Groq, and Perplexity—configured through your environment variables.
+
+## AI compose
+
+To compose an email with AI help:
+
+<Steps>
+  <Step title="Open the compose window">
+    Click **Compose** or press **C** to open a new message.
+  </Step>
+  <Step title="Describe what you want to write">
+    Type a prompt describing the email you want to send — for example, "Write a follow-up to a client about the proposal we sent last week."
+  </Step>
+  <Step title="Generate and refine">
+    Click the AI button or press the AI shortcut. Zero generates a draft you can edit before sending.
+  </Step>
+</Steps>
+
+## Thread summarization
+
+Open any email thread and click the **Summarize** button to get a concise summary of the conversation. This is useful for long threads where you need the key points quickly.
+
+## Mailbox Q&A
+
+Ask natural language questions about your email directly from the search bar or the AI chat panel. Examples:
+
+- "Did I get any invoices from Acme Corp this month?"
+- "What did Sarah say about the project deadline?"
+- "Show me all emails with attachments from last week"
+
+## Web search
+
+Zero integrates with Perplexity AI for web search within the email context. When composing or researching, you can trigger a web search to pull in current information without leaving the app.
+
+## Writing style learning
+
+Zero observes your sent emails and builds a writing style profile over time. When you use AI compose, suggestions adapt to match your tone, vocabulary, and formatting preferences.
+
+## Supported AI models
+
+Configure which models Zero uses via environment variables:
+
+| Variable | Purpose | Example |
+|----------|---------|---------|
+| `OPENAI_MODEL` | Primary model for composition | `gpt-4o` |
+| `OPENAI_MINI_MODEL` | Faster, lighter tasks | `gpt-4o-mini` |
+| `PERPLEXITY_API_KEY` | Web search | — |
+| `GROQ_API_KEY` | Alternative fast inference | — |
+
+<Note>AI features require at least `OPENAI_API_KEY` to be set. See the [environment variables reference](/configuration/environment-variables) for all AI configuration options.</Note>
+
+<CardGroup cols={2}>
+  <Card title="MCP integration" icon="plug" href="/features/mcp-integration">
+    Use Zero's AI features from external tools
+  </Card>
+  <Card title="Environment variables" icon="gear" href="/configuration/environment-variables">
+    Configure AI model keys
+  </Card>
+</CardGroup>

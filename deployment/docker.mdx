@@ -1,0 +1,135 @@
+---
+title: "Deploy Zero with Docker Compose in production"
+description: "Run the full Zero stack in production using Docker Compose. Includes PostgreSQL, Valkey cache, the Zero app container, and automatic database migrations."
+---
+
+Docker Compose is the fastest way to run the complete Zero stack on your own infrastructure. The production compose file orchestrates six services — the Next.js app, a PostgreSQL 17 database, a Valkey cache, an Upstash-compatible Redis HTTP proxy, and a one-shot migrations container — wiring them together with health checks and startup ordering so the app only starts once the database is ready and all schema migrations have been applied.
+
+<Warning>
+  `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` must be set in your `.env` file before starting the stack. Without them, Google OAuth will fail and users will be unable to sign in.
+</Warning>
+
+## Service breakdown
+
+| Service | Image | Purpose | Exposed port |
+|---|---|---|---|
+| `zero` | Built from `docker/app/Dockerfile` | Next.js frontend + API server | `3000` |
+| `migrations` | Built from `docker/db/Dockerfile` | Runs `pnpm db:migrate` once on startup | — |
+| `db` | `postgres:17-alpine` | Primary PostgreSQL database | — (internal) |
+| `valkey` | `bitnami/valkey:8.0` | Redis-compatible in-memory cache | — (internal) |
+| `upstash-proxy` | `hiett/serverless-redis-http:latest` | Upstash-compatible HTTP proxy over Valkey | — (internal) |
+
+## Deploy
+
+<Steps>
+  <Step title="Clone the repository">
+    ```bash
+    git clone https://github.com/Mail-0/Zero.git
+    cd Zero
+    ```
+  </Step>
+
+  <Step title="Configure environment variables">
+    Copy the example file and fill in the required values. At a minimum you must set the variables listed in the [Required environment variables](#required-environment-variables) section below.
+
+    ```bash
+    cp .env.example .env
+    ```
+
+    Open `.env` in your editor and update each value for your production environment.
+  </Step>
+
+  <Step title="Start the stack">
+    ```bash
+    docker compose -f docker-compose.prod.yaml up -d
+    ```
+
+    Docker Compose will build the `zero` and `migrations` images, start `db` and `valkey`, wait for their health checks to pass, run migrations, and finally start the app.
+  </Step>
+
+  <Step title="Verify the deployment">
+    Check that the `zero` container is healthy:
+
+    ```bash
+    docker compose -f docker-compose.prod.yaml ps
+    ```
+
+    Once the `zero` service shows `healthy`, the app is reachable at `http://<your-host>:3000`. You can also test the built-in health check directly:
+
+    ```bash
+    curl -s -o /dev/null -w "%{http_code}" http://localhost:3000
+    ```
+
+    A `200` response confirms the server is up.
+  </Step>
+</Steps>
+
+## Required environment variables
+
+These variables have no useful default and must be provided before starting the stack.
+
+| Variable | Description |
+|---|---|
+| `BETTER_AUTH_SECRET` | Secret key used to sign auth tokens. Generate with `openssl rand -hex 32`. |
+| `GOOGLE_CLIENT_ID` | OAuth 2.0 client ID from Google Cloud Console. |
+| `GOOGLE_CLIENT_SECRET` | OAuth 2.0 client secret from Google Cloud Console. |
+| `REDIS_URL` | HTTP URL for the Upstash-compatible Redis proxy (e.g. `http://upstash-proxy:80` when using the bundled proxy). |
+| `RESEND_API_KEY` | API key for the Resend email sending service. |
+| `NEXT_PUBLIC_BACKEND_URL` | Public URL of the backend API (Cloudflare Worker endpoint or your own). |
+| `NEXT_PUBLIC_APP_URL` | Public URL of the Zero frontend (e.g. `https://mail.example.com`). |
+
+The following variables are optional but enable additional features when set:
+
+| Variable | Feature |
+|---|---|
+| `OPENAI_API_KEY` | AI email composition and summarisation |
+| `PERPLEXITY_API_KEY` | Perplexity-powered search |
+| `OPENAI_MODEL` / `OPENAI_MINI_MODEL` | Override the default OpenAI model names |
+| `AI_SYSTEM_PROMPT` | Custom system prompt for the AI assistant |
+| `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_PHONE_NUMBER` | SMS notifications |
+| `AUTUMN_SECRET_KEY` | Encryption service integration |
+| `NEXT_PUBLIC_POSTHOG_KEY` / `NEXT_PUBLIC_POSTHOG_HOST` | PostHog analytics |
+
+## Volumes
+
+The compose file declares two named volumes that persist data across container restarts and upgrades.
+
+| Volume | Mounted in | Purpose |
+|---|---|---|
+| `postgres-data` | `db` at `/var/lib/postgresql/data` | All PostgreSQL data files |
+| `valkey-data` | `valkey` at `/bitnami/valkey/data` | Valkey on-disk persistence |
+
+To inspect or back up a volume, use `docker volume inspect <volume-name>` to find the host path.
+
+## Management commands
+
+**Stop the stack** (containers removed, volumes kept):
+```bash
+docker compose -f docker-compose.prod.yaml down
+```
+
+**Restart a single service:**
+```bash
+docker compose -f docker-compose.prod.yaml restart zero
+```
+
+**View logs for all services:**
+```bash
+docker compose -f docker-compose.prod.yaml logs -f
+```
+
+**View logs for a specific service:**
+```bash
+docker compose -f docker-compose.prod.yaml logs -f zero
+```
+
+**Pull the latest images and rebuild:**
+```bash
+docker compose -f docker-compose.prod.yaml pull
+docker compose -f docker-compose.prod.yaml up -d --build
+```
+
+**Remove everything including volumes** (destructive — deletes all data):
+```bash
+docker compose -f docker-compose.prod.yaml down -v
+```

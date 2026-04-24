@@ -1,0 +1,67 @@
+---
+title: "Zero: open-source AI email for privacy-first teams"
+description: "Zero is a self-hostable, open-source email client with a unified inbox, AI-powered composition, and deep privacy controls. Connect Gmail, Outlook, and more."
+---
+
+Zero is an open-source email application built for people who want full control over their email experience. It unifies multiple email accounts into a single inbox, brings AI assistance directly into your workflow, and gives you the freedom to self-host your own instance—with no data tracking, no vendor lock-in, and no hidden agendas.
+
+<CardGroup cols={2}>
+  <Card title="Quick start" icon="rocket" href="/quickstart">
+    Get Zero running locally in under 10 minutes
+  </Card>
+  <Card title="Self-hosting" icon="server" href="/self-hosting">
+    Deploy your own Zero instance with Docker or Cloudflare
+  </Card>
+  <Card title="AI assistant" icon="sparkles" href="/features/ai-assistant">
+    Compose, search, and summarize email with AI
+  </Card>
+  <Card title="MCP integration" icon="plug" href="/features/mcp-integration">
+    Connect Zero to AI tools via the Model Context Protocol
+  </Card>
+</CardGroup>
+
+## What is Zero?
+
+Zero replaces your email client while keeping your existing providers. You sign in with your Gmail or Outlook account, and Zero syncs your mail into a fast, unified interface that you control. You can run it on your own infrastructure or use the hosted version at [0.email](https://0.email).
+
+Key capabilities:
+
+- **Unified inbox** — read and reply to mail from multiple accounts in one place
+- **AI composition** — draft emails, summarize threads, and search your mailbox with natural language
+- **Privacy first** — Zero does not track, collect, or sell your email data
+- **Open source** — MIT-licensed, fully transparent, community-driven
+- **Self-hostable** — run on Docker or Cloudflare Workers with your own database
+
+## How Zero works
+
+Zero is a full-stack TypeScript monorepo. The frontend is a React Router v7 application built with Vite and deployed to Cloudflare Pages. The backend is a tRPC API server running on Cloudflare Workers. Email data is synced from providers like Gmail using their native APIs and stored in Cloudflare Durable Objects and R2—so reads are fast and your data stays under your control.
+
+<CardGroup cols={2}>
+  <Card title="Environment variables" icon="gear" href="/configuration/environment-variables">
+    Configure API keys and service connections
+  </Card>
+  <Card title="Database setup" icon="database" href="/configuration/database">
+    Set up PostgreSQL for Zero's data layer
+  </Card>
+  <Card title="Email providers" icon="envelope" href="/configuration/email-providers">
+    Connect Gmail, Outlook, and other accounts
+  </Card>
+  <Card title="Contributing" icon="code-pull-request" href="/contributing/overview">
+    Help build Zero with the community
+  </Card>
+</CardGroup>
+
+## Tech stack
+
+| Layer | Technology |
+|-------|-----------|
+| Frontend | React 19, React Router v7, Vite, TailwindCSS, Shadcn UI |
+| Backend | Node.js, tRPC, Drizzle ORM |
+| Database | PostgreSQL |
+| Auth | Better Auth, Google OAuth |
+| Infrastructure | Cloudflare Workers, Durable Objects, R2 |
+| Build | pnpm, Turborepo |
+
+## Open source
+
+Zero is MIT-licensed. Source code is available at [github.com/Mail-0/Zero](https://github.com/Mail-0/Zero). Contributions, bug reports, and feature requests are welcome—see the [contributing guide](/contributing/overview) to get involved.

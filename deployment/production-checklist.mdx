@@ -1,0 +1,141 @@
+---
+title: "Production checklist before going live with Zero"
+description: "A practical checklist for launching Zero in production: environment variables, OAuth setup, database migrations, security settings, and health verification."
+---
+
+Before exposing Zero to real users, work through the items below to confirm that every required service is configured, credentials are correctly scoped to your production domain, and the application is healthy. The checklist is ordered by dependency — completing each step in sequence avoids the most common launch failures.
+
+<Steps>
+  <Step title="Generate a secure BETTER_AUTH_SECRET">
+    `BETTER_AUTH_SECRET` signs all authentication tokens. It must be a cryptographically random value — never reuse a development secret in production.
+
+    ```bash
+    openssl rand -hex 32
+    ```
+
+    Copy the output into your `.env` file or upload it as a Cloudflare secret:
+
+    ```bash
+    npx wrangler secret put BETTER_AUTH_SECRET --env production
+    ```
+
+    <Warning>
+      If `BETTER_AUTH_SECRET` is left as the placeholder value `my-better-auth-secret` from `.env.example`, any attacker who reads the source code can forge valid session tokens. Rotate this secret before your first real user logs in.
+    </Warning>
+  </Step>
+
+  <Step title="Set all required environment variables">
+    Verify that every required variable is present and non-empty. Use the table below as a reference:
+
+    | Variable | Where to set | Notes |
+    |---|---|---|
+    | `BETTER_AUTH_SECRET` | `.env` / Cloudflare secret | 32-byte hex string (see step above) |
+    | `DATABASE_URL` | `.env` | Full PostgreSQL connection string |
+    | `GOOGLE_CLIENT_ID` | `.env` / Cloudflare secret | From Google Cloud Console |
+    | `GOOGLE_CLIENT_SECRET` | `.env` / Cloudflare secret | From Google Cloud Console |
+    | `REDIS_URL` | `.env` | HTTP URL of your Upstash or local Redis proxy |
+    | `REDIS_TOKEN` | `.env` | Token for the Redis HTTP proxy |
+    | `RESEND_API_KEY` | `.env` / Cloudflare secret | Required for transactional email |
+    | `OPENAI_API_KEY` | `.env` / Cloudflare secret | Required for AI features |
+    | `NEXT_PUBLIC_APP_URL` | `.env` | Public URL of the frontend (e.g. `https://mail.example.com`) |
+    | `NEXT_PUBLIC_BACKEND_URL` | `.env` | Public URL of the backend Worker |
+
+    <Note>
+      `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and `TWILIO_PHONE_NUMBER` are only required if you want SMS notifications. Leave them empty to disable that feature.
+    </Note>
+  </Step>
+
+  <Step title="Update Google OAuth redirect URIs for your production domain">
+    The Google OAuth client registered in development is scoped to `localhost`. Before going live you must add your production domain to the authorised redirect URI list.
+
+    1. Open [Google Cloud Console → APIs & Services → Credentials](https://console.cloud.google.com/apis/credentials).
+    2. Select your OAuth 2.0 client.
+    3. Under **Authorised redirect URIs**, add:
+       ```
+       https://<your-domain>/api/auth/callback/google
+       ```
+    4. Save. Changes propagate within a few minutes.
+
+    Also update `BETTER_AUTH_URL` (or its equivalent `VITE_PUBLIC_APP_URL`) in your production environment to match the domain you registered above.
+
+    For more detail see the [authentication configuration guide](/configuration/authentication).
+  </Step>
+
+  <Step title="Run database migrations">
+    Apply all pending schema migrations to your production PostgreSQL database before starting the app:
+
+    ```bash
+    pnpm db:migrate
+    ```
+
+    When deploying with Docker Compose, the `migrations` service handles this automatically and the `zero` container will not start until migrations complete successfully. For Cloudflare deployments you must run this step manually against your production database.
+
+    <Warning>
+      Never run `pnpm db:push` against a production database — it can drop columns or tables to match the current schema without generating a migration history. Always use `pnpm db:migrate` in production.
+    </Warning>
+  </Step>
+
+  <Step title="Verify health checks are passing">
+    **Docker Compose:**
+
+    ```bash
+    docker compose -f docker-compose.prod.yaml ps
+    ```
+
+    All services should show `healthy`. The `zero` container health check polls `http://127.0.0.1:3000` every 90 seconds and allows 3 retries before marking the container unhealthy.
+
+    **Cloudflare Workers:**
+
+    After deploying, open the Workers dashboard and confirm the Worker shows no startup errors in the **Logs** tab. You can also send a test request:
+
+    ```bash
+    curl -I https://<your-worker-subdomain>.workers.dev
+    ```
+
+    Expect a `200` or `301` response, not a `5xx`.
+  </Step>
+
+  <Step title="Confirm HTTPS is configured">
+    All production traffic must be served over HTTPS to protect auth cookies and user data.
+
+    - **Cloudflare Workers / Pages** — HTTPS is provided automatically. No action required.
+    - **Docker Compose** — Zero itself listens on port `3000` over plain HTTP. Place a TLS-terminating reverse proxy (e.g. Caddy, Nginx, or Cloudflare Tunnel) in front of the container.
+
+    <Note>
+      Cloudflare Tunnel (`cloudflared`) is a convenient option for Docker deployments: it creates an outbound-only encrypted tunnel from your server to Cloudflare's edge, giving you a public HTTPS URL with no inbound firewall rules required.
+    </Note>
+  </Step>
+
+  <Step title="Configure Twilio for SMS notifications (optional)">
+    If you want Zero to send SMS notifications, set the three Twilio variables in your environment before starting the app:
+
+    ```bash
+    TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+    TWILIO_AUTH_TOKEN=your_auth_token
+    TWILIO_PHONE_NUMBER=+15550001234
+    ```
+
+    Leave all three empty to disable SMS. See the [email providers guide](/configuration/email-providers) for related notification configuration.
+  </Step>
+
+  <Step title="Set up email sending with Resend">
+    Zero uses [Resend](https://resend.com) for transactional email (notifications, account emails). Provide your API key:
+
+    ```bash
+    RESEND_API_KEY=re_xxxxxxxxxxxxxxxxxxxx
+    ```
+
+    Verify your sending domain in the Resend dashboard and ensure the `From` address used by Zero matches a verified domain. See the [email providers guide](/configuration/email-providers) for further configuration options.
+  </Step>
+</Steps>
+
+## Final verification
+
+Once all steps are complete, sign in with a real Google account and confirm:
+
+- OAuth redirects to your production domain, not `localhost`
+- Email threads load correctly
+- AI compose features respond (if `OPENAI_API_KEY` is set)
+- No errors appear in the Worker logs or Docker container logs
+
+If any step is failing, consult the [environment variables reference](/configuration/environment-variables) or the deployment guide for your target platform ([Docker](/deployment/docker) · [Cloudflare](/deployment/cloudflare)).

@@ -1,0 +1,465 @@
+---
+title: "Environment variables reference for Zero email client"
+description: "Full reference for Zero's environment variables by category: app URLs, database, auth, Google OAuth, Redis, Resend, AI model keys, and Cloudflare settings."
+---
+
+Zero is configured entirely through environment variables. The fastest way to scaffold your `.env` file is to run `pnpm nizzy env`, which copies `.env.example` to `.env`. After editing the file, run `pnpm nizzy sync` to regenerate the typed environment helpers used throughout the codebase.
+
+```bash
+# Scaffold .env from the example file
+pnpm nizzy env
+
+# Sync types after any change to .env
+pnpm nizzy sync
+```
+
+<Note>
+  Variables prefixed with `VITE_PUBLIC_` are embedded into the frontend bundle at build time and are visible to the browser. Never put secrets in a `VITE_PUBLIC_` variable.
+</Note>
+
+---
+
+## App URLs
+
+These two variables tell each part of the stack where to find the other. In local development and Cloudflare deployments they are named `VITE_PUBLIC_APP_URL` and `VITE_PUBLIC_BACKEND_URL`. The Docker Compose production file maps them to `NEXT_PUBLIC_APP_URL` and `NEXT_PUBLIC_BACKEND_URL` for the container runtime.
+
+<ParamField path="body.VITE_PUBLIC_APP_URL" type="string" required>
+  The public URL of the Next.js frontend. Used by the backend to build redirect and verification URLs.
+
+  **Default:** `http://localhost:3000`
+
+  ```env
+  VITE_PUBLIC_APP_URL=http://localhost:3000
+  ```
+</ParamField>
+
+<ParamField path="body.VITE_PUBLIC_BACKEND_URL" type="string" required>
+  The public URL of the Hono / Cloudflare Workers backend. The frontend uses this to route API requests.
+
+  **Default:** `http://localhost:8787`
+
+  ```env
+  VITE_PUBLIC_BACKEND_URL=http://localhost:8787
+  ```
+</ParamField>
+
+<ParamField path="body.COOKIE_DOMAIN" type="string" required>
+  The domain used for cross-subdomain session cookies. Set to your root domain in production so cookies work across `app.` and `api.` subdomains.
+
+  **Default:** `localhost`
+
+  ```env
+  COOKIE_DOMAIN="localhost"
+  ```
+</ParamField>
+
+<ParamField path="body.NODE_ENV" type="string">
+  Runtime environment. Affects cookie naming (`better-auth-dev` vs `better-auth`) and certain feature flags.
+
+  **Accepted values:** `development`, `production`, `local`
+
+  ```env
+  NODE_ENV="development"
+  ```
+</ParamField>
+
+---
+
+## Database
+
+<ParamField path="body.DATABASE_URL" type="string" required>
+  PostgreSQL connection string. The local Docker Compose setup creates a database that matches the default value exactly.
+
+  **Format:** `postgresql://<user>:<password>@<host>:<port>/<database>`
+
+  ```env
+  DATABASE_URL="postgresql://postgres:postgres@localhost:5432/zerodotemail"
+  ```
+</ParamField>
+
+---
+
+## Authentication
+
+<ParamField path="body.BETTER_AUTH_SECRET" type="string" required>
+  Secret key used by [Better Auth](https://better-auth.com) to sign session tokens and cookies. Must be a cryptographically random string. Generate one with the command below.
+
+  ```bash
+  openssl rand -hex 32
+  ```
+
+  ```env
+  BETTER_AUTH_SECRET=your_secret_key
+  ```
+</ParamField>
+
+<ParamField path="body.BETTER_AUTH_URL" type="string" required>
+  The canonical URL Better Auth uses as its base for callbacks and redirects. In development this is your frontend URL.
+
+  ```env
+  BETTER_AUTH_URL=http://localhost:3000
+  ```
+</ParamField>
+
+<ParamField path="body.BETTER_AUTH_TRUSTED_ORIGINS" type="string">
+  Comma-separated list of origins allowed to make cross-origin auth requests. Extend this list when adding custom subdomains in production.
+
+  ```env
+  BETTER_AUTH_TRUSTED_ORIGINS=https://app.example.com,https://example.com
+  ```
+</ParamField>
+
+<ParamField path="body.AUTUMN_SECRET_KEY" type="string" required>
+  Secret key for the [Autumn](https://useautumn.com) encryption and billing service. Required for account deletion and some encryption paths. Obtain this from the Autumn dashboard.
+
+  ```env
+  AUTUMN_SECRET_KEY=your_autumn_secret
+  ```
+</ParamField>
+
+---
+
+## Google OAuth
+
+Google OAuth is the primary authentication and Gmail connection method. Both variables are required.
+
+<ParamField path="body.GOOGLE_CLIENT_ID" type="string" required>
+  OAuth 2.0 client ID from the Google Cloud Console. Created under **APIs & Services → Credentials**.
+
+  ```env
+  GOOGLE_CLIENT_ID=123456789-abcdefg.apps.googleusercontent.com
+  ```
+</ParamField>
+
+<ParamField path="body.GOOGLE_CLIENT_SECRET" type="string" required>
+  OAuth 2.0 client secret paired with `GOOGLE_CLIENT_ID`.
+
+  ```env
+  GOOGLE_CLIENT_SECRET=GOCSPX-your_secret
+  ```
+</ParamField>
+
+<ParamField path="body.GOOGLE_REDIRECT_URI" type="string">
+  Explicit redirect URI override. If unset, the backend constructs the URI from `VITE_PUBLIC_BACKEND_URL`. Only set this if your backend URL differs from the OAuth callback path.
+
+  ```env
+  GOOGLE_REDIRECT_URI=https://api.example.com/api/auth/callback/google
+  ```
+</ParamField>
+
+---
+
+## Redis / cache
+
+Zero uses an Upstash-compatible HTTP Redis client. The local Docker Compose setup runs a Valkey instance with a serverless-redis-http proxy that satisfies these variables out of the box.
+
+<ParamField path="body.REDIS_URL" type="string" required>
+  HTTP URL of the Upstash Redis (or compatible proxy) instance.
+
+  **Default (local):** `http://localhost:8079`
+
+  ```env
+  REDIS_URL="http://localhost:8079"
+  ```
+</ParamField>
+
+<ParamField path="body.REDIS_TOKEN" type="string" required>
+  Authentication token for the Redis HTTP proxy.
+
+  **Default (local):** `upstash-local-token`
+
+  <Warning>
+    Change this to a strong secret before deploying to production. The default token has no security value.
+  </Warning>
+
+  ```env
+  REDIS_TOKEN="upstash-local-token"
+  ```
+</ParamField>
+
+---
+
+## Email sending (Resend)
+
+Zero sends transactional emails (welcome sequences, account deletion confirmations, password resets) through [Resend](https://resend.com).
+
+<ParamField path="body.RESEND_API_KEY" type="string">
+  API key from the Resend dashboard. Transactional emails are disabled when this is not set.
+
+  ```env
+  RESEND_API_KEY=re_your_api_key
+  ```
+</ParamField>
+
+---
+
+## AI / LLM
+
+These variables enable Zero's AI composition and search features. All are optional — AI features degrade gracefully when keys are absent.
+
+<ParamField path="body.OPENAI_API_KEY" type="string">
+  API key for OpenAI. Powers AI email composition, summarization, and the AI assistant.
+
+  ```env
+  OPENAI_API_KEY=sk-your_openai_key
+  ```
+</ParamField>
+
+<ParamField path="body.OPENAI_MODEL" type="string">
+  Name of the primary OpenAI model to use for heavier tasks.
+
+  **Example values:** `gpt-4o`, `gpt-4-turbo`
+
+  ```env
+  OPENAI_MODEL=gpt-4o
+  ```
+</ParamField>
+
+<ParamField path="body.OPENAI_MINI_MODEL" type="string">
+  Name of the faster, cheaper OpenAI model for lightweight inference.
+
+  **Example values:** `gpt-4o-mini`, `gpt-3.5-turbo`
+
+  ```env
+  OPENAI_MINI_MODEL=gpt-4o-mini
+  ```
+</ParamField>
+
+<ParamField path="body.PERPLEXITY_API_KEY" type="string">
+  API key for Perplexity AI, used for web-search-augmented responses.
+
+  ```env
+  PERPLEXITY_API_KEY=pplx-your_key
+  ```
+</ParamField>
+
+<ParamField path="body.ANTHROPIC_API_KEY" type="string">
+  API key for Anthropic Claude models, used as an alternative LLM backend.
+
+  ```env
+  ANTHROPIC_API_KEY=sk-ant-your_key
+  ```
+</ParamField>
+
+<ParamField path="body.GROQ_API_KEY" type="string">
+  API key for Groq's fast inference API.
+
+  ```env
+  GROQ_API_KEY=gsk_your_key
+  ```
+</ParamField>
+
+<ParamField path="body.GOOGLE_GENERATIVE_AI_API_KEY" type="string">
+  API key for Google Gemini models.
+
+  ```env
+  GOOGLE_GENERATIVE_AI_API_KEY=AIza_your_key
+  ```
+</ParamField>
+
+<ParamField path="body.AI_SYSTEM_PROMPT" type="string">
+  Optional override for the system prompt sent to the AI assistant. Leave blank to use the built-in default.
+
+  ```env
+  AI_SYSTEM_PROMPT="You are a helpful email assistant."
+  ```
+</ParamField>
+
+---
+
+## Cloudflare
+
+These variables are required when deploying the backend to Cloudflare Workers or when using Cloudflare-specific features such as AutoRAG.
+
+<ParamField path="body.CLOUDFLARE_ACCOUNT_ID" type="string">
+  Your Cloudflare account ID. Found in the Cloudflare dashboard under **Workers & Pages**.
+
+  ```env
+  CLOUDFLARE_ACCOUNT_ID=your_account_id
+  ```
+</ParamField>
+
+<ParamField path="body.CLOUDFLARE_API_TOKEN" type="string">
+  Cloudflare API token with Workers and R2 permissions.
+
+  ```env
+  CLOUDFLARE_API_TOKEN=your_api_token
+  ```
+</ParamField>
+
+<ParamField path="body.AUTORAG_ID" type="string">
+  Cloudflare AutoRAG index ID, used for retrieval-augmented generation over your email threads.
+
+  ```env
+  AUTORAG_ID=your_autorag_id
+  ```
+</ParamField>
+
+---
+
+## Microsoft OAuth (optional)
+
+<Warning>
+  Microsoft / Outlook support is implemented in the driver layer but the provider is currently commented out in `auth-providers.ts`. These variables have no effect until Microsoft OAuth is re-enabled in a future release.
+</Warning>
+
+<ParamField path="body.MICROSOFT_CLIENT_ID" type="string">
+  Azure AD application (client) ID for Microsoft OAuth.
+
+  ```env
+  MICROSOFT_CLIENT_ID=your_azure_client_id
+  ```
+</ParamField>
+
+<ParamField path="body.MICROSOFT_CLIENT_SECRET" type="string">
+  Azure AD client secret.
+
+  ```env
+  MICROSOFT_CLIENT_SECRET=your_azure_client_secret
+  ```
+</ParamField>
+
+---
+
+## Twilio (optional)
+
+Twilio is used for phone number verification (OTP). All three variables must be set together for SMS to work.
+
+<ParamField path="body.TWILIO_ACCOUNT_SID" type="string">
+  Twilio account SID from the [Twilio console](https://console.twilio.com).
+
+  ```env
+  TWILIO_ACCOUNT_SID=ACyour_account_sid
+  ```
+</ParamField>
+
+<ParamField path="body.TWILIO_AUTH_TOKEN" type="string">
+  Twilio auth token, found alongside the account SID.
+
+  ```env
+  TWILIO_AUTH_TOKEN=your_auth_token
+  ```
+</ParamField>
+
+<ParamField path="body.TWILIO_PHONE_NUMBER" type="string">
+  The Twilio phone number that sends OTP messages. Must be in E.164 format.
+
+  ```env
+  TWILIO_PHONE_NUMBER=+15550001234
+  ```
+</ParamField>
+
+---
+
+## Thread sync (optional)
+
+These variables control Zero's background thread-syncing agent that pre-fetches email threads into Durable Objects and R2.
+
+<ParamField path="body.THREAD_SYNC_MAX_COUNT" type="string">
+  Maximum number of threads to sync per request. The Gmail API caps results at `500`.
+
+  **Accepted values:** `5`, `10`, `20`, up to `500`
+
+  ```env
+  THREAD_SYNC_MAX_COUNT=20
+  ```
+</ParamField>
+
+<ParamField path="body.THREAD_SYNC_LOOP" type="string">
+  When `true`, the sync agent continues paginating until a folder is fully synced. Recommended in production.
+
+  **Accepted values:** `true`, `false`
+
+  ```env
+  THREAD_SYNC_LOOP=true
+  ```
+</ParamField>
+
+<ParamField path="body.DROP_AGENT_TABLES" type="string">
+  When `true`, the sync Durable Object drops its local threads table before starting a fresh sync. Use with caution.
+
+  **Accepted values:** `true`, `false`
+
+  ```env
+  DROP_AGENT_TABLES=false
+  ```
+</ParamField>
+
+---
+
+## Other optional variables
+
+<ParamField path="body.ELEVENLABS_API_KEY" type="string">
+  API key for ElevenLabs text-to-speech, used for the voice assistant feature.
+
+  ```env
+  ELEVENLABS_API_KEY=your_elevenlabs_key
+  ```
+</ParamField>
+
+<ParamField path="body.VITE_PUBLIC_ELEVENLABS_AGENT_ID" type="string">
+  Public ElevenLabs agent ID, embedded into the frontend for the voice interface.
+
+  ```env
+  VITE_PUBLIC_ELEVENLABS_AGENT_ID=your_agent_id
+  ```
+</ParamField>
+
+<ParamField path="body.DISABLE_CALLS" type="string">
+  Set to `true` to disable the voice call feature entirely.
+
+  ```env
+  DISABLE_CALLS=true
+  ```
+</ParamField>
+
+<ParamField path="body.COMPOSIO_API_KEY" type="string">
+  API key for Composio integrations.
+
+  ```env
+  COMPOSIO_API_KEY=your_composio_key
+  ```
+</ParamField>
+
+<ParamField path="body.AXIOM_API_TOKEN" type="string">
+  API token for Axiom log ingestion.
+
+  ```env
+  AXIOM_API_TOKEN=your_axiom_token
+  ```
+</ParamField>
+
+<ParamField path="body.AXIOM_DATASET" type="string">
+  Axiom dataset name where logs are written.
+
+  ```env
+  AXIOM_DATASET=zero-production
+  ```
+</ParamField>
+
+<ParamField path="body.EARLY_ACCESS_ENABLED" type="string">
+  When set to `true`, restricts sign-up to emails on the early-access allowlist.
+
+  ```env
+  EARLY_ACCESS_ENABLED=true
+  ```
+</ParamField>
+
+---
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Database setup" icon="database" href="/configuration/database">
+    Start PostgreSQL, push the schema, and explore your data with Drizzle Studio
+  </Card>
+  <Card title="Authentication" icon="lock" href="/configuration/authentication">
+    Understand session tokens and how to authenticate API requests
+  </Card>
+  <Card title="Email providers" icon="envelope" href="/configuration/email-providers">
+    Connect Gmail and configure Google OAuth in the Cloud Console
+  </Card>
+  <Card title="Self-hosting" icon="server" href="/self-hosting">
+    Deploy Zero to production with Docker Compose or Cloudflare Workers
+  </Card>
+</CardGroup>

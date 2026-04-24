@@ -1,0 +1,196 @@
+---
+title: "PostgreSQL database setup and schema management for Zero"
+description: "Set up PostgreSQL for Zero using Docker Compose, push the Drizzle schema, manage migrations, and browse data with Drizzle Studio. Covers all db: commands."
+---
+
+Zero stores user accounts, sessions, email connections, and application data in a PostgreSQL database managed with [Drizzle ORM](https://orm.drizzle.team). For local development, a Docker Compose file spins up PostgreSQL, Valkey (a Redis-compatible cache), and the Upstash HTTP proxy in a single command. The schema is defined in `apps/server/src/db/schema.ts` and all table names are prefixed with `mail0_` to avoid collisions in shared database environments.
+
+---
+
+## Initial setup
+
+<Steps>
+  <Step title="Configure the connection string">
+    Make sure your `.env` file contains the `DATABASE_URL` variable. The default value matches the local Docker Compose setup exactly.
+
+    ```env
+    DATABASE_URL="postgresql://postgres:postgres@localhost:5432/zerodotemail"
+    ```
+
+    If you have not created your `.env` file yet, run:
+
+    ```bash
+    pnpm nizzy env
+    pnpm nizzy sync
+    ```
+
+    <Tip>
+      After any change to `.env`, run `pnpm nizzy sync` to regenerate the TypeScript environment helpers. Skipping this step can cause type errors at build time.
+    </Tip>
+  </Step>
+
+  <Step title="Start the database containers">
+    The `docker-compose.db.yaml` file starts three containers that work together: PostgreSQL, Valkey, and an Upstash-compatible HTTP proxy for the Redis client.
+
+    ```bash
+    pnpm docker:db:up
+    ```
+
+    This creates:
+
+    | Container | Image | Port |
+    |-----------|-------|------|
+    | `zerodotemail-db` | `postgres:17` | `5432` |
+    | `zerodotemail-redis` | `bitnami/valkey:8.0` | `6379` |
+    | `zerodotemail-upstash-proxy` | `hiett/serverless-redis-http` | `8079` |
+
+    **Default database credentials:**
+
+    | Setting | Value |
+    |---------|-------|
+    | Database name | `zerodotemail` |
+    | Username | `postgres` |
+    | Password | `postgres` |
+    | Port | `5432` |
+
+    <Warning>
+      Never use these default credentials in production. Generate a strong password and update `DATABASE_URL` before deploying.
+    </Warning>
+  </Step>
+
+  <Step title="Push the schema">
+    Apply the Drizzle schema to the running database. This introspects the schema file and creates all tables without generating migration files — the right choice for getting started quickly.
+
+    ```bash
+    pnpm db:push
+    ```
+
+    You should see output confirming that each `mail0_*` table was created. Re-run this command any time you pull schema changes from the upstream repository and want to apply them without going through the full migration workflow.
+  </Step>
+
+  <Step title="Start the application">
+    With the database running and schema applied, start the full development stack:
+
+    ```bash
+    pnpm dev
+    ```
+
+    Drizzle Studio starts automatically alongside the app. You can also open it directly at any time:
+
+    ```bash
+    pnpm db:studio
+    ```
+  </Step>
+</Steps>
+
+---
+
+## Database commands reference
+
+| Command | Description |
+|---------|-------------|
+| `pnpm docker:db:up` | Start PostgreSQL, Valkey, and the Redis HTTP proxy |
+| `pnpm docker:db:down` | Stop and remove all database containers |
+| `pnpm docker:db:clean` | Stop containers and delete volumes (all data is lost) |
+| `pnpm db:push` | Apply schema changes directly without migration files |
+| `pnpm db:generate` | Generate Drizzle migration files from schema changes |
+| `pnpm db:migrate` | Apply pending migration files in order |
+| `pnpm db:studio` | Open Drizzle Studio in the browser |
+
+---
+
+## Schema overview
+
+All tables are created with the `mail0_` prefix (defined via `pgTableCreator` in `schema.ts`). The core tables are:
+
+| Table | Purpose |
+|-------|---------|
+| `mail0_user` | User accounts, profile info, and default connection |
+| `mail0_session` | Active user sessions with expiry timestamps |
+| `mail0_account` | OAuth provider accounts linked to users |
+| `mail0_connection` | Connected email accounts (Gmail, Outlook) with stored tokens |
+| `mail0_verification` | Email and phone verification tokens |
+| `mail0_user_settings` | Per-user preferences stored as JSONB |
+| `mail0_user_hotkeys` | Custom keyboard shortcut mappings |
+| `mail0_summary` | AI-generated email summaries keyed by message ID |
+| `mail0_note` | Inline thread notes created by the user |
+| `mail0_writing_style_matrix` | Per-connection writing style vectors for AI composition |
+| `mail0_email_template` | Saved email templates |
+| `mail0_early_access` | Early-access allowlist entries |
+| `mail0_jwks` | JSON Web Key Sets for JWT signing |
+| `mail0_oauth_application` | Registered OAuth applications (MCP clients) |
+| `mail0_oauth_access_token` | OAuth access and refresh tokens for registered apps |
+| `mail0_oauth_consent` | User consent records for OAuth applications |
+
+---
+
+## Migration workflow
+
+Use migrations when you need reproducible, reviewable schema changes — for example, when contributing to the project or managing a production database.
+
+<Steps>
+  <Step title="Make schema changes">
+    Edit `apps/server/src/db/schema.ts`. All table definitions live in this single file.
+  </Step>
+
+  <Step title="Generate migration files">
+    Drizzle compares your schema to the current database state and generates SQL migration files in `apps/server/src/db/migrations/`.
+
+    ```bash
+    pnpm db:generate
+    ```
+  </Step>
+
+  <Step title="Review the generated SQL">
+    Open the file created in `apps/server/src/db/migrations/` and confirm the SQL matches your intent before applying it.
+  </Step>
+
+  <Step title="Apply migrations">
+    ```bash
+    pnpm db:migrate
+    ```
+
+    This applies all pending migration files in order. The production Docker Compose stack runs this command automatically in a dedicated `migrations` container on each deploy.
+  </Step>
+</Steps>
+
+<Note>
+  `pnpm db:push` and `pnpm db:migrate` are mutually exclusive workflows. Use `db:push` for local development speed; use `db:generate` + `db:migrate` for production changes where you need an audit trail.
+</Note>
+
+---
+
+## Connection string format
+
+```
+postgresql://<username>:<password>@<host>:<port>/<database>
+```
+
+| Segment | Local value | Description |
+|---------|-------------|-------------|
+| `username` | `postgres` | Database user |
+| `password` | `postgres` | User password |
+| `host` | `localhost` | Host running PostgreSQL |
+| `port` | `5432` | Default PostgreSQL port |
+| `database` | `zerodotemail` | Target database name |
+
+For managed databases (Neon, Supabase, PlanetScale), replace the entire string with the connection string provided by your provider. Neon and Supabase connection strings work directly — no additional configuration is needed.
+
+---
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Environment variables" icon="gear" href="/configuration/environment-variables">
+    Full reference for DATABASE_URL and all other configuration options
+  </Card>
+  <Card title="Authentication" icon="lock" href="/configuration/authentication">
+    How session tokens are stored and how to authenticate API requests
+  </Card>
+  <Card title="Self-hosting" icon="server" href="/self-hosting">
+    Production database setup with Docker Compose or a managed provider
+  </Card>
+  <Card title="Email providers" icon="envelope" href="/configuration/email-providers">
+    Connect Gmail and other accounts after the database is running
+  </Card>
+</CardGroup>

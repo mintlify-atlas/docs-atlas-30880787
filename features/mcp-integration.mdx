@@ -1,0 +1,95 @@
+---
+title: "Connect Zero to AI tools with MCP integration"
+description: "Zero's MCP server lets AI assistants like Claude read and manage your email. Authenticate with your session token to connect any MCP-compatible client."
+---
+
+Zero implements the Model Context Protocol (MCP), which means you can connect AI tools like Claude Desktop directly to your Zero inbox. Once connected, your AI assistant can read threads, send email, manage labels, search your mailbox, and more — all without leaving your AI chat interface.
+
+## What you can do with MCP
+
+### Email management
+
+- Get email threads by ID
+- List emails in specific folders
+- Create and send new emails
+- Create email drafts
+- Send existing drafts
+- Delete emails
+- Mark emails as read or unread
+- Modify email labels
+- Bulk delete emails
+- Bulk archive emails
+
+### Label management
+
+- Get all your labels
+- Create new custom labels with custom colors
+- Delete existing labels
+
+### AI-powered features
+
+- Compose emails with AI assistance
+- Ask questions about your mailbox content
+- Ask questions about specific email threads
+- Web search using Perplexity AI
+
+### Search and organization
+
+- Search emails with custom queries
+- Filter emails by label
+- Manage email organization through labels
+- Archive and trash management
+
+## Connecting to Zero MCP
+
+Zero MCP currently authenticates using a Better Auth session token copied from your browser.
+
+<Steps>
+  <Step title="Sign in to Zero">
+    Open Zero in your browser and sign in with your email account.
+  </Step>
+  <Step title="Copy your session token">
+    Open browser DevTools (`F12`), go to **Application → Cookies**, and find the cookie named `better-auth.session_token` (production) or `better-auth-dev.session_token` (local development). Copy the cookie value.
+
+    Alternatively, you can copy the full cookie field from the Zero webapp and use it directly — Zero will parse it correctly. The manual format is:
+
+    ```
+    better-auth-{env}.session_token={value}
+    ```
+
+    Replace `{env}` with `dev` for local development, and `{value}` with your session token.
+  </Step>
+  <Step title="Configure your MCP client">
+    Add Zero to your MCP client configuration using the session token as a Bearer token in the `Authorization` header.
+  </Step>
+</Steps>
+
+## Claude Desktop configuration
+
+Add Zero MCP to your Claude Desktop `claude_desktop_config.json`:
+
+```json claude_desktop_config.json
+{
+  "mcpServers": {
+    "zero": {
+      "url": "https://your-zero-instance/mcp",
+      "headers": {
+        "Authorization": "Bearer your-session-token-here"
+      }
+    }
+  }
+}
+```
+
+For local development, use `http://localhost:8787/mcp` as the URL.
+
+<Note>OAuth support for MCP is coming soon. For now, use the session token method above.</Note>
+
+<CardGroup cols={2}>
+  <Card title="Authentication" icon="key" href="/configuration/authentication">
+    Learn about session tokens and sign-in
+  </Card>
+  <Card title="AI assistant" icon="sparkles" href="/features/ai-assistant">
+    Use AI features inside Zero directly
+  </Card>
+</CardGroup>

@@ -1,0 +1,88 @@
+{
+  "projectType": "saas",
+  "projectName": "Zero (Mail-0)",
+  "projectDescription": "Zero is an open-source, AI-powered email client that lets you self-host your own privacy-first email app with a unified inbox, AI agents, and integrations for Gmail and other providers.",
+  "theme": "willow",
+  "primaryColor": "#040404",
+  "lightColor": "#7c7c7c",
+  "darkColor": "#cecece",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "self-hosting"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "configuration/environment-variables",
+              "configuration/database",
+              "configuration/authentication",
+              "configuration/email-providers"
+            ]
+          },
+          {
+            "group": "Core Features",
+            "pages": [
+              "features/unified-inbox",
+              "features/ai-assistant",
+              "features/labels-and-filters",
+              "features/keyboard-shortcuts",
+              "features/mcp-integration"
+            ]
+          },
+          {
+            "group": "Deployment",
+            "pages": [
+              "deployment/docker",
+              "deployment/cloudflare",
+              "deployment/production-checklist"
+            ]
+          },
+          {
+            "group": "Contributing",
+            "pages": [
+              "contributing/overview",
+              "contributing/translations"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Unified inbox connecting Gmail, Outlook, and other email providers",
+    "AI-powered email composition and smart replies",
+    "Self-hosting with Docker and Cloudflare Workers support",
+    "Privacy-first architecture — no data tracking or selling",
+    "MCP (Model Context Protocol) integration for AI tooling",
+    "Custom labels, categories, and filters",
+    "Keyboard shortcuts and customizable UI",
+    "Multi-account support with connection management",
+    "Thread sync with Cloudflare Durable Objects and R2",
+    "Open-source under MIT license"
+  ],
+  "publicApiSurface": [
+    "GET /api/mail/threads — list email threads by folder",
+    "GET /api/mail/thread/:id — get a single thread",
+    "POST /api/mail/send — send a new email",
+    "POST /api/mail/draft — create a draft",
+    "DELETE /api/mail/thread/:id — delete a thread",
+    "PATCH /api/mail/labels — modify thread labels",
+    "GET /api/labels — list user labels",
+    "POST /api/labels — create a label",
+    "DELETE /api/labels/:id — delete a label",
+    "POST /api/ai/compose — AI-assisted email composition",
+    "POST /api/ai/search — semantic search over mailbox",
+    "GET /api/connections — list connected email accounts",
+    "MailManager interface — get, create, list, delete, markAsRead, markAsUnread, modifyLabels, getUserLabels, createLabel, deleteLabel, getEmailAliases",
+    "nizzy CLI — env setup, sync environment variables"
+  ]
+}

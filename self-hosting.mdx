@@ -1,0 +1,253 @@
+---
+title: "Self-hosting Zero: Docker Compose and Cloudflare Workers"
+description: "Self-host Zero in production using Docker Compose or Cloudflare Workers. Covers the full service stack, environment variables, health checks, and volumes."
+---
+
+Zero is designed to be self-hosted. You own the infrastructure, the database, and the data. This page covers the two supported deployment approaches: a fully containerised Docker Compose stack for teams that want to run everything on their own servers, and a Cloudflare Workers deployment for teams that prefer a globally distributed, serverless setup.
+
+<Tabs>
+  <Tab title="Docker Compose">
+    ## Docker Compose deployment
+
+    The `docker-compose.prod.yaml` file defines a production-ready stack with five services that start in dependency order. All services include health checks so Docker waits for each dependency to be ready before starting the next one.
+
+    ### Services overview
+
+    | Service | Image | Role |
+    |---------|-------|------|
+    | `zero` | Built from `docker/app/Dockerfile` | Next.js application, port `3000` |
+    | `db` | `postgres:17-alpine` | PostgreSQL database |
+    | `valkey` | `bitnami/valkey:8.0` | Redis-compatible cache |
+    | `upstash-proxy` | `hiett/serverless-redis-http` | HTTP proxy for the Upstash Redis client |
+    | `migrations` | Built from `docker/db/Dockerfile` | Runs `pnpm db:migrate` once, then exits |
+
+    The `zero` application container only starts after `db` is healthy, `migrations` has completed successfully, `valkey` is healthy, and `upstash-proxy` is healthy.
+
+    <Steps>
+      <Step title="Clone the repository">
+        ```bash
+        git clone https://github.com/Mail-0/Zero.git
+        cd Zero
+        ```
+      </Step>
+
+      <Step title="Create your production environment file">
+        Copy the example file and set production values:
+
+        ```bash
+        cp .env.example .env
+        ```
+
+        At minimum, set the following variables before starting the stack. Refer to the full [environment variables reference](/configuration/environment-variables) for all options.
+
+        <Note>
+          The Docker Compose production file uses `NEXT_PUBLIC_APP_URL` and `NEXT_PUBLIC_BACKEND_URL` as the public URL variable names. Your local `.env.example` uses `VITE_PUBLIC_*` equivalents — use the `NEXT_PUBLIC_*` names when deploying via Docker Compose.
+        </Note>
+
+        ```env
+        # Application URLs
+        NEXT_PUBLIC_APP_URL=https://your-domain.com
+        NEXT_PUBLIC_BACKEND_URL=https://your-backend-domain.com
+
+        # Database credentials — override defaults for production
+        POSTGRES_USER=your_db_user
+        POSTGRES_PASSWORD=your_secure_password
+        POSTGRES_DB=zerodotemail
+
+        # Auth
+        BETTER_AUTH_SECRET=<output of: openssl rand -hex 32>
+
+        # Google OAuth
+        GOOGLE_CLIENT_ID=your_client_id
+        GOOGLE_CLIENT_SECRET=your_client_secret
+
+        # Redis token — change from the default for production
+        REDIS_TOKEN=your_secure_token
+
+        # Email sending
+        RESEND_API_KEY=your_resend_api_key
+
+        # AI features
+        OPENAI_API_KEY=your_openai_api_key
+        OPENAI_MODEL=gpt-4o
+        OPENAI_MINI_MODEL=gpt-4o-mini
+
+        # Encryption
+        AUTUMN_SECRET_KEY=your_autumn_secret
+        ```
+
+        <Warning>
+          Never use the default `postgres` / `postgres` credentials or the default `upstash-local-token` Redis token in production. Generate strong secrets before you deploy.
+        </Warning>
+      </Step>
+
+      <Step title="Start the stack">
+        ```bash
+        docker compose -f docker-compose.prod.yaml up -d
+        ```
+
+        Docker will:
+        1. Pull or build all images
+        2. Start `db` and wait for its health check to pass
+        3. Run the `migrations` container to apply database schema
+        4. Start `valkey` and `upstash-proxy`
+        5. Start the `zero` application container
+
+        Check that all services are running:
+
+        ```bash
+        docker compose -f docker-compose.prod.yaml ps
+        ```
+      </Step>
+
+      <Step title="Verify the deployment">
+        The `zero` container exposes port `3000` and includes a health check:
+
+        ```bash
+        # Check health status
+        docker compose -f docker-compose.prod.yaml ps zero
+
+        # Tail application logs
+        docker compose -f docker-compose.prod.yaml logs -f zero
+        ```
+
+        Once the `zero` service reports `healthy`, the application is ready. If you are running behind a reverse proxy (nginx, Caddy, Traefik), point it at port `3000` on the Docker host.
+      </Step>
+    </Steps>
+
+    ### Health checks
+
+    Each service defines a health check so the stack starts in the correct order:
+
+    | Service | Health check command | Interval |
+    |---------|---------------------|----------|
+    | `db` | `pg_isready -U postgres -d zerodotemail` | 10 s |
+    | `valkey` | `redis-cli ping` | 10 s |
+    | `upstash-proxy` | HTTP GET `http://127.0.0.1:80` | 10 s |
+    | `zero` | HTTP GET `http://127.0.0.1:3000` | 90 s |
+
+    The longer interval for `zero` accounts for Next.js build time during the first startup.
+
+    ### Persistent volumes
+
+    The Compose file declares two named volumes to persist data across container restarts:
+
+    | Volume | Used by |
+    |--------|---------|
+    | `postgres-data` | `db` service — all database files |
+    | `valkey-data` | `valkey` service — cache snapshots |
+
+    <Warning>
+      Back up the `postgres-data` volume before upgrading the `db` image or running destructive migrations. Data loss from volume removal is not recoverable.
+    </Warning>
+
+    ### Managing the stack
+
+    ```bash
+    # Stop all containers without removing them
+    docker compose -f docker-compose.prod.yaml stop
+
+    # Stop and remove containers (volumes are preserved)
+    docker compose -f docker-compose.prod.yaml down
+
+    # Pull latest images and restart
+    docker compose -f docker-compose.prod.yaml pull && \
+      docker compose -f docker-compose.prod.yaml up -d
+
+    # View logs for a specific service
+    docker compose -f docker-compose.prod.yaml logs -f db
+    ```
+  </Tab>
+
+  <Tab title="Cloudflare Workers">
+    ## Cloudflare Workers deployment
+
+    Zero's backend server is built to run on Cloudflare Workers. The frontend (Next.js) deploys to Cloudflare Pages. This approach gives you a globally distributed deployment with no servers to manage.
+
+    <Note>
+      The Cloudflare Workers deployment requires a Cloudflare account with Workers, Durable Objects, and R2 enabled. You still need a PostgreSQL database—use a managed provider such as Neon, Supabase, or PlanetScale.
+    </Note>
+
+    <Steps>
+      <Step title="Install dependencies and configure environment">
+        ```bash
+        git clone https://github.com/Mail-0/Zero.git
+        cd Zero
+        pnpm install
+        pnpm nizzy env
+        ```
+
+        Edit `.env` with your production values, including your managed PostgreSQL connection string and any required API keys.
+
+        ```bash
+        pnpm nizzy sync
+        ```
+      </Step>
+
+      <Step title="Deploy the backend">
+        The backend server lives in `apps/server` and deploys to Cloudflare Workers using Wrangler.
+
+        ```bash
+        pnpm deploy:backend
+        ```
+
+        After deployment, note the Worker URL—you will need it for the `NEXT_PUBLIC_BACKEND_URL` variable in the frontend.
+      </Step>
+
+      <Step title="Deploy the frontend">
+        The Next.js frontend deploys to Cloudflare Pages:
+
+        ```bash
+        pnpm deploy:frontend
+        ```
+
+        Set `NEXT_PUBLIC_BACKEND_URL` to your Cloudflare Worker URL before deploying the frontend so the client knows where to send API requests.
+      </Step>
+
+      <Step title="Configure Google OAuth redirect URI">
+        In the [Google Cloud Console](https://console.cloud.google.com), update the authorized redirect URI for your OAuth client to match your production Worker URL:
+
+        ```
+        https://your-worker.your-subdomain.workers.dev/api/auth/callback/google
+        ```
+
+        <Warning>
+          The redirect URI must match exactly—including protocol, domain, and path. A mismatch causes all sign-in attempts to fail with an OAuth error.
+        </Warning>
+      </Step>
+    </Steps>
+  </Tab>
+</Tabs>
+
+## Required environment variables for production
+
+The following variables must be set in any production deployment. See the [environment variables reference](/configuration/environment-variables) for the complete list.
+
+| Variable | Description |
+|----------|-------------|
+| `BETTER_AUTH_SECRET` | Random 32-byte hex string. Generate with `openssl rand -hex 32`. |
+| `DATABASE_URL` | PostgreSQL connection string. |
+| `GOOGLE_CLIENT_ID` | Google OAuth client ID for Gmail integration. |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth client secret. |
+| `REDIS_URL` | URL of the Upstash-compatible HTTP Redis proxy. |
+| `REDIS_TOKEN` | Authentication token for the Redis proxy. |
+| `RESEND_API_KEY` | API key for transactional email sending via Resend. |
+| `OPENAI_API_KEY` | API key for AI composition and search features. |
+| `AUTUMN_SECRET_KEY` | Secret key for the Autumn encryption service. |
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Environment variables" icon="gear" href="/configuration/environment-variables">
+    Full reference for every configuration option Zero supports
+  </Card>
+  <Card title="Database setup" icon="database" href="/configuration/database">
+    Migrations, schema management, and Drizzle Studio
+  </Card>
+  <Card title="Authentication" icon="lock" href="/configuration/authentication">
+    Configure Better Auth and Google OAuth for your deployment
+  </Card>
+  <Card title="Production checklist" icon="circle-check" href="/deployment/production-checklist">
+    Review everything before going live
+  </Card>
+</CardGroup>

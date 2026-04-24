@@ -1,0 +1,195 @@
+---
+title: "Contribute to Zero: setup, workflow, and guidelines"
+description: "Contribute to Zero's open-source codebase. Covers local dev setup, the PR workflow, code style, and how to report bugs or request features."
+---
+
+Zero is an MIT-licensed, open-source AI email client that welcomes contributions of all kinds — from bug reports and feature requests to translations and documentation improvements. The project is built on a modern TypeScript/Next.js monorepo and uses pnpm workspaces, making it straightforward to run locally and submit changes. Whether you're fixing a typo or implementing a new integration, every contribution helps make email more open, private, and user-centric.
+
+## Local development setup
+
+Zero requires Node.js v18+, pnpm v10+, and Docker v20+. The steps below follow the project's own `AGENT.md` configuration.
+
+<Steps>
+  <Step title="Clone the repository and install dependencies">
+    Fork the repo on GitHub, then clone your fork and add the upstream remote:
+
+    ```bash
+    git clone https://github.com/YOUR-USERNAME/Zero.git
+    cd Zero
+
+    # Add the upstream remote to stay in sync
+    git remote add upstream https://github.com/Mail-0/Zero.git
+
+    # Install all workspace dependencies
+    pnpm install
+    ```
+  </Step>
+
+  <Step title="Start the database">
+    Zero uses PostgreSQL via Docker. Spin up a local instance with:
+
+    ```bash
+    pnpm docker:db:up
+    ```
+
+    This creates a database named `zerodotemail` on port `5432` with the default credentials `postgres`/`postgres`.
+  </Step>
+
+  <Step title="Configure environment variables">
+    Use the `nizzy` CLI tool to scaffold your `.env` file and sync types:
+
+    ```bash
+    pnpm nizzy env    # copies .env.example → .env
+    pnpm nizzy sync   # syncs environment variables and generated types
+    ```
+
+    At minimum you will need `BETTER_AUTH_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `DATABASE_URL`. See the [README](https://github.com/Mail-0/Zero/blob/main/README.md#environment-setup) for full setup instructions for Google OAuth, Autumn, and Twilio.
+  </Step>
+
+  <Step title="Initialize the database schema">
+    Push the Drizzle schema to your local database:
+
+    ```bash
+    pnpm db:push
+    ```
+  </Step>
+
+  <Step title="Start the development server">
+    The quickest way to start everything at once:
+
+    ```bash
+    pnpm go
+    ```
+
+    Alternatively, run servers individually:
+
+    ```bash
+    pnpm dev
+    ```
+
+    The mail app is available at [http://localhost:3000](http://localhost:3000).
+  </Step>
+</Steps>
+
+### Monorepo structure
+
+| Path | Description |
+|---|---|
+| `apps/mail/` | React Router v7 frontend email client |
+| `apps/server/` | Backend server (Cloudflare Workers) |
+| `packages/cli/` | `nizzy` CLI tool |
+| `packages/eslint-config/` | Shared ESLint configuration |
+| `packages/tsconfig/` | Shared TypeScript configuration |
+| `packages/testing/` | Shared test utilities |
+
+### Common database commands
+
+```bash
+pnpm db:push       # Apply schema changes to the development database
+pnpm db:generate   # Generate Drizzle migration files after schema changes
+pnpm db:migrate    # Apply migrations (for production)
+pnpm db:studio     # Open Drizzle Studio to inspect and edit data
+```
+
+## Code style conventions
+
+Zero enforces consistent style across the entire codebase via Prettier and ESLint. The rules come from `AGENT.md`:
+
+- **Indentation**: 2 spaces
+- **Quotes**: single quotes
+- **Line width**: 100 characters maximum
+- **Semicolons**: required
+- **Plugins**: `prettier-plugin-sort-imports`, `prettier-plugin-tailwindcss`
+- **TypeScript**: strict mode enabled; avoid `any` — `"no-explicit-any"` will be enforced
+- **Linting**: ESLint + [Oxlint](https://oxc.rs/docs/guide/usage/linter.html)
+
+### JavaScript / TypeScript
+
+- Use TypeScript for all new code
+- Use `async`/`await` for asynchronous operations
+- Handle errors and edge cases explicitly
+- Use proper TypeScript types and interfaces — do not use `any`
+
+### React
+
+- Use functional components and hooks only
+- Keep components small and single-responsibility
+- Define prop types with TypeScript interfaces
+- Follow responsive design principles
+
+<Note>
+  Always run `pnpm check` before committing. This command runs both the Prettier format check and ESLint across all packages, and will catch issues before CI does. Use `pnpm format` to auto-fix formatting, and `pnpm lint` to see linting errors in detail.
+</Note>
+
+## Contribution workflow
+
+<Steps>
+  <Step title="Create a branch">
+    Always branch off `staging` (not `main`):
+
+    ```bash
+    git checkout -b feature/your-feature-name
+    # or
+    git checkout -b fix/your-bug-fix
+    ```
+  </Step>
+
+  <Step title="Make your changes">
+    Write clean, readable code. If you're adding a feature, include any necessary tests and update documentation. If a new UI string is added, add it to `apps/mail/messages/en.json` — do not hardcode visible text.
+  </Step>
+
+  <Step title="Run quality checks">
+    ```bash
+    pnpm check
+    ```
+
+    This runs format checking and linting. Fix any reported issues before moving on.
+  </Step>
+
+  <Step title="Commit with a descriptive message">
+    Zero follows the [Conventional Commits](https://www.conventionalcommits.org/) style:
+
+    ```bash
+    git commit -m "feat: add new email threading feature
+
+    Implements #123"
+    ```
+  </Step>
+
+  <Step title="Stay in sync with upstream">
+    Keep your branch up to date with `staging`:
+
+    ```bash
+    git fetch upstream
+    git merge upstream/staging
+    ```
+  </Step>
+
+  <Step title="Push and open a pull request">
+    ```bash
+    git push origin your-branch-name
+    ```
+
+    Open a pull request **targeting the `staging` branch** on GitHub. Fill out the PR template, link any relevant issues, and add screenshots for UI changes.
+  </Step>
+</Steps>
+
+## What to contribute
+
+Zero welcomes contributions across all areas of the project:
+
+- **Bug fixes** — open a [GitHub issue](https://github.com/Mail-0/Zero/issues) first to describe the problem, then submit a PR with your fix
+- **New features** — discuss the idea in an issue before starting significant work
+- **Translations** — help bring Zero to more users; see the [Translations guide](/contributing/translations)
+- **Documentation** — improve clarity, fix typos, or document new APIs
+- **UI/UX improvements** — design enhancements and accessibility fixes
+- **Security** — report vulnerabilities responsibly via GitHub issues
+- **Performance** — profiling and optimisation patches are welcome
+- **Tests** — unit tests, integration tests, and edge-case coverage
+
+## Community
+
+Join the conversation and get help from other contributors:
+
+- [GitHub Issues](https://github.com/Mail-0/Zero/issues) — bug reports, feature requests, and discussions
+- [Discord](https://discord.gg/mail0) — real-time chat with the team and community

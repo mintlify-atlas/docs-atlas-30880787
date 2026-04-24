@@ -1,0 +1,219 @@
+---
+title: "Translate Zero into other languages with Lingo.dev"
+description: "Help bring Zero to more users by contributing translations. Zero uses Lingo.dev for AI-powered i18n across 20+ locales, managed in apps/mail/messages."
+---
+
+Zero is built for a global audience, and its internationalization (i18n) system makes it possible to ship the app in dozens of languages. English is the source locale; all other translations live as JSON files under `apps/mail/messages/`. The project uses [Lingo.dev](https://github.com/lingodotdev/lingo.dev) — an open-source CLI and AI localization engine — to automate translation of new and changed strings whenever English source content is committed. Translations are managed through a GitHub Actions workflow, meaning most translation work happens automatically. Community members can still contribute by adding new language targets, manually overriding AI-generated strings, or helping developers correctly externalize UI text.
+
+## Supported languages
+
+The following locales are configured as active translation targets in `i18n.json`. Lingo.dev automatically generates and maintains translation files for each of them.
+
+| Code | Language |
+|---|---|
+| `ar` | Arabic |
+| `ca` | Catalan |
+| `cs` | Czech |
+| `de` | German |
+| `es` | Spanish |
+| `fr` | French |
+| `hi` | Hindi |
+| `hu` | Hungarian |
+| `ja` | Japanese |
+| `ko` | Korean |
+| `lv` | Latvian |
+| `nl` | Dutch |
+| `fa` | Persian |
+| `pl` | Polish |
+| `pt` | Portuguese |
+| `ru` | Russian |
+| `tr` | Turkish |
+| `vi` | Vietnamese |
+| `zh-CN` | Chinese (Simplified) |
+| `zh-TW` | Chinese (Traditional) |
+
+The `locales.ts` file in `apps/mail/` lists a much broader set of locale codes that Zero is designed to support over time. The active targets in `i18n.json` are the ones currently receiving automated translations.
+
+## Where translation files live
+
+```
+apps/mail/
+├── messages/
+│   ├── en.json          ← English source strings (edit this one)
+│   ├── de.json          ← Auto-generated German
+│   ├── es.json          ← Auto-generated Spanish
+│   └── ...              ← One file per target locale
+├── i18n/
+│   └── config.ts        ← i18n runtime configuration (locale list)
+└── locales.ts           ← Master list of supported locale codes and names
+```
+
+The `i18n.json` file at the project root configures Lingo.dev:
+
+```json
+{
+  "$schema": "https://lingo.dev/schema/i18n.json",
+  "version": 1.5,
+  "locale": {
+    "source": "en",
+    "targets": ["ar", "ca", "cs", "de", "es", "fr", "hi", "nl", "ja", "ko",
+                "lv", "pl", "pt", "ru", "tr", "hu", "fa", "vi", "zh-CN", "zh-TW"]
+  },
+  "buckets": {
+    "json": {
+      "include": ["apps/mail/messages/[locale].json"]
+    }
+  }
+}
+```
+
+## How the automated translation workflow operates
+
+Zero's translation process is fully automated via GitHub Actions:
+
+1. A developer adds or updates strings in `apps/mail/messages/en.json`
+2. On push to a feature branch, the Lingo.dev GitHub Action runs automatically
+3. Lingo.dev's AI generates translations for all target languages, using translation memory and project context configured in the Lingo.dev dashboard
+4. Updated translation files are committed back to the repository via a pull request
+
+Developers only need to maintain the English source. The automated pipeline handles the rest.
+
+## Contributing translations
+
+### Manually overriding an AI-generated string
+
+If you spot an incorrect or unnatural translation, you can fix it directly:
+
+<Steps>
+  <Step title="Find the target locale file">
+    Navigate to `apps/mail/messages/` and open the file for your language, for example `de.json` for German or `es.json` for Spanish.
+  </Step>
+
+  <Step title="Find and update the key">
+    Locate the key you want to improve and change its value:
+
+    ```json
+    // Before
+    "welcomeMessage": "Willkommen bei 0.email"
+
+    // After
+    "welcomeMessage": "Herzlich willkommen bei 0.email"
+    ```
+
+    Lingo.dev stores manual overrides in its translation memory and reuses them in future runs, so your correction will persist.
+  </Step>
+
+  <Step title="Commit your change">
+    ```bash
+    git add apps/mail/messages/de.json
+    git commit -m "fix(i18n): improve German welcome message translation"
+    ```
+
+    Open a pull request targeting the `staging` branch.
+  </Step>
+</Steps>
+
+### Adding a new language target
+
+<Steps>
+  <Step title="Add the locale code to i18n.json">
+    Open `i18n.json` at the project root and add the new language code to the `targets` array:
+
+    ```json
+    "targets": ["ar", "ca", "cs", "de", "es", "fr", "hi", "nl", "ja", "ko",
+                "lv", "pl", "pt", "ru", "tr", "hu", "fa", "vi", "zh-CN", "zh-TW",
+                "sv"]
+    ```
+  </Step>
+
+  <Step title="Register the locale in the i18n config">
+    Open `apps/mail/i18n/config.ts` and add the new locale code to the locale list there as well.
+  </Step>
+
+  <Step title="Commit and open a pull request">
+    ```bash
+    git add i18n.json apps/mail/i18n/config.ts
+    git commit -m "feat(i18n): add Swedish (sv) as a translation target"
+    ```
+
+    Once the PR is merged into `staging`, the GitHub Action will generate the initial `sv.json` file automatically.
+  </Step>
+</Steps>
+
+### Adding translations for new features
+
+When you implement a new feature that has visible UI text, you are responsible for externalizing all strings before submitting the PR:
+
+<Steps>
+  <Step title="Add English source strings">
+    Open `apps/mail/messages/en.json` and add your new strings following the existing hierarchical key structure:
+
+    ```json
+    {
+      "pages": {
+        "settings": {
+          "connections": {
+            "disconnectSuccess": "Account disconnected successfully"
+          }
+        }
+      }
+    }
+    ```
+
+    Use descriptive, dot-separated keys that identify the feature and context.
+  </Step>
+
+  <Step title="Follow i18n formatting standards">
+    Use the correct ICU message format for dynamic content:
+
+    | Pattern | Example |
+    |---|---|
+    | Variable interpolation | `"Hello, {name}!"` |
+    | Plural forms | `"{count, plural, =0 {no items} one {item} other {items}}"` |
+
+    Never concatenate strings — always use variables so translators have the full sentence context.
+  </Step>
+
+  <Step title="Verify no text is hardcoded">
+    Before opening a PR, check that:
+    - All visible UI text is externalized into `en.json`
+    - Strings are grouped logically within the JSON structure
+    - Keys provide enough context for translators
+    - The feature works correctly with the default English locale
+  </Step>
+</Steps>
+
+## Testing translations locally
+
+To verify a translation looks correct in the running app:
+
+<Steps>
+  <Step title="Set your browser or system locale">
+    Change your browser's preferred language to the locale you want to test (for example, `de` for German). Next.js reads the `Accept-Language` header and serves the appropriate locale.
+  </Step>
+
+  <Step title="Start the development server">
+    ```bash
+    pnpm go
+    ```
+
+    Then visit [http://localhost:3000](http://localhost:3000). The app should render in the selected language.
+  </Step>
+
+  <Step title="Edit a translation file and reload">
+    Open the relevant file in `apps/mail/messages/` (for example `de.json`), make your change, and save. Next.js hot-reloads the page, so you can see the updated string immediately without restarting the server.
+  </Step>
+</Steps>
+
+## Translation guidelines
+
+Keep these rules in mind when writing or reviewing translations:
+
+- **Preserve placeholders**: `{count}`, `{email}`, and similar variable names must not be translated or modified
+- **Keep formatting tags intact**: Tags like `<strong>` and `<em>` must remain in the translated text in the correct positions
+- **Maintain plural structures**: ICU plural forms (`{count, plural, ...}`) must keep their syntax; only translate the words inside the innermost curly braces
+- **Do not concatenate strings**: Always pass the full sentence as a single translation key so the translator has full context
+
+## Need help?
+
+If you have questions about translation or run into issues, [open a GitHub issue](https://github.com/Mail-0/Zero/issues) or ask in the [Discord server](https://discord.gg/mail0).
